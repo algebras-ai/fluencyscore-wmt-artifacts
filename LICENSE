@@ -1,0 +1,16 @@
+Copyright (c) 2026 Algebras AI
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this package (paper sources, numeric tables, and scrubbed notebooks) to use,
+copy, modify, and distribute them for research and evaluation purposes, subject
+to the following conditions:
+
+1. FluencyScore judge prompts, sub-dimension weight tuples, and proprietary
+   routing logic are NOT licensed here and are intentionally omitted.
+2. The above copyright notice and this permission notice shall be included in
+   all copies or substantial portions of the package.
+3. THE SOFTWARE AND ARTIFACTS ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY
+   KIND.
+
+Paper text remains subject to venue copyright transfer upon acceptance;
+until then this notice applies to the bundled research artifacts.

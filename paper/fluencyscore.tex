@@ -1,0 +1,1096 @@
+% FluencyScore research paper — WMT / EMNLP ACL format
+% Research track: ACL style (EMNLP guidelines). Working draft (final, not anonymized).
+% Target for submission: 6--10 pages excl. limitations/refs/appendices.
+\documentclass[11pt]{article}
+
+\usepackage[final]{acl}
+\usepackage{times}
+\usepackage{latexsym}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.15}
+\usepackage{amsmath}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{xurl}
+\usepackage{enumitem}
+\setlist{nosep,leftmargin=*}
+
+\newcommand{\FS}{FluencyScore}
+\newcommand{\FSCal}{FluencyScore-cal}
+
+\title{\FS: A Structured {LLM}-Judge for Fluency in Machine Translation}
+
+\author{
+  Airana Mongush$^1$ \\
+  Algebras AI \\
+  \texttt{aira@algebras.ai}
+  \And
+  Dmitrii Pukhov \\
+  Algebras AI \\
+  \texttt{dima@algebras.ai}
+}
+
+\renewcommand{\thefootnote}{\fnsymbol{footnote}}
+
+\begin{document}
+\maketitle
+\footnotetext[1]{Correspondence: \texttt{aira@algebras.ai}. Working draft --- 2026-07-02 (updated 2026-08-13).}
+
+\begin{abstract}
+LLM-based machine translation evaluation has advanced rapidly since
+\cite{kocmi-federmann-2023a} showed that zero-shot prompting of GPT models
+reaches state-of-the-art system-level agreement with MQM ratings, and that the
+capability emerges only from GPT-3.5 upward.
+Later work extended the approach in several directions: MQM-style error
+annotation with PaLM-2, with quality dependent on model scale
+(AutoMQM; \citealp{fernandes-etal-2023-automqm}); few-shot GPT-4 prompting,
+ranked among the strongest submissions at WMT23
+(GEMBA-MQM; \citealp{kocmi-federmann-2023b,freitag-etal-2023-wmt});
+reasoning-based prompting \cite{lu-etal-2024-error}; and repeated sampling, with
+GEMBA-MQM~V2 aggregating ten GPT-4.1-mini judgments per segment to rank first on
+the WMT24 MQM test sets \cite{junczys-dowmunt-2025-gemba-v2}.
+The official WMT25 metrics likewise run on a GPT-4.1 backbone.
+
+At the same time, several results indicate that further correlation gains along
+this axis are limited.
+Judge accuracy does not consistently track model capability
+\cite{tan-etal-2025-judgebench}; human preference data measurably favors fluent
+but incorrect responses \cite{sharma-etal-2024-sycophancy,openai-2025-sycophancy};
+and the design of the scoring scheme itself shapes model behavior
+\cite{kalai-etal-2025-hallucinate}.
+Part of the headroom above current metrics is therefore annotation noise rather
+than unmodeled quality.
+
+\FS{} agrees with expert rankings on 72\% of segment pairs on WMT25 ESA and on
+78\% on WMT22 MQM, ahead of every released baseline on identical segments
+(MetricX-24-Hybrid, XCOMET, CometKiwi, chrF++; all $p{<}0.001$), and its pooled
+segment-level Spearman of $0.61$--$0.62$ is at or above published
+inter-annotator agreement for these protocols
+($0.41$--$0.58$; \citealp{freitag-etal-2021-experts}).
+To attribute these numbers correctly, we compare against the strongest available
+baseline: GEMBA-ESA, the family used for the official WMT25 scores, re-run on the
+same Gemini backbone, the same segments, and the same fair mask.
+On this matched setup the two frameworks are statistically equivalent in
+correlation ($\Delta\rho{=}{+}0.007$, CI covering zero); of the ${+}0.065$ gap over
+the official leaderboard score, ${+}0.058$ is contributed by the backbone.
+Variation across language pairs is roughly twenty times larger than any effect of
+prompt design.
+
+Our hypotheses for the structured framework therefore concern its outputs rather
+than its score, and the largest confirmed return is diagnostic.
+For every segment, \FS{} produces a complete error record: an issue type from a
+fixed taxonomy, a severity level, the exact problem phrase, and a suggested fix.
+In addition, the structured variant is substantially more stable under a change of
+judge, varying within a $0.022$ Spearman range across four backbones against
+$0.128$ for a flat single-score variant of the same rubric, and its per-pair
+behavior is predictable from typological distance.
+Further framework gains (calibration, sub-dimension weighting, language-pair
+routing) remain hypotheses under active test.
+
+The relevant question for LLM-based evaluation is thus shifting: well-prompted
+judges already match human judgment up to annotation noise, so the value of an
+evaluation lies in what it returns at that level of accuracy, and in whether those
+returns persist when the underlying model changes.
+\FS{} is designed for this setting.
+\end{abstract}
+
+\section{Introduction}
+This section motivates treating fluency as a distinct evaluation axis and states the contributions of the paper.
+\subsection{Problem and motivation}
+Automatic MT metrics such as COMET, GEMBA, and chrF conflate several quality
+dimensions and do not isolate fluency as a distinct axis.
+Fluency covers idiomatic phrasing, collocational fit, discourse coherence,
+pragmatic appropriateness, and freedom from calque; a single scalar rarely
+exposes where a translation fails on these grounds.
+
+WMT25 ESA and historical WMT MQM benchmarks provide independent human judgments
+at the segment level \cite{kocmi-etal-2024-esa,kocmi-etal-2025-wmt25}.
+We use a fair comparison protocol (same segments, no imputation, bootstrap CIs)
+and complement aggregate correlation with per-segment error analysis.
+
+\subsection{Contributions}
+\begin{itemize}
+\item A structured, rubric-based LLM-judge (\FS{}) with five weighted fluency
+  sub-dimensions and a double-pass scoring procedure, plus a monotone
+  calibration (\FSCal{}) for reporting.
+\item A fair-comparison evaluation against official WMT25 metrics and against
+  GEMBA-MQM / FluencyScore-MQM on WMT22--24, with bootstrap 95\% CIs and paired
+  bootstrap tests; matched-backbone contrasts are primary.
+\item A backbone ablation and a typological analysis linking syntactic distance
+  to \FS{}'s advantage.
+\item A segment-level error analysis with an issue-type taxonomy, headline
+  failure modes, and a variance-collapse study of the MQM-style variant.
+\end{itemize}
+
+\section{\FS{} and \FSCal{}}
+\textbf{Structured \FS{}:} the judge fills five sub-dimension scores and an
+error record; we combine the five scores into one scalar aggregate.\\
+\textbf{Flat variant:} the same backbone is asked for a single overall fluency
+score with no rubric and no error record (our FluencyScore-MQM-flat condition).\\
+\textbf{FluencyScore-MQM:} the same rubric as structured \FS{}, but scored on a
+negative MQM-style scale (start high, subtract severity penalties).
+
+\FS{} scores five fluency sub-dimensions---idiomatic, collocational, discourse,
+pragmatic, and calque---and aggregates them with fixed weights into a single
+value on a 1--10 scale.
+The sub-dimension weights and the full judge prompt are proprietary
+(Section~\ref{sec:repro}; Appendix~\ref{app:schema}).
+
+\FSCal{} is a fixed piecewise-linear, non-decreasing map of the raw aggregate onto
+a reporting scale that is easier to compare with human ESA/MQM numbers.
+Because the map is non-decreasing, rank correlations are unchanged up to ties.
+Parameters were fixed during development and are not fitted on any evaluation
+cohort in this paper.
+
+\subsection{Output schema, taxonomy, and scoring protocol}
+\textbf{Reference-free by design.}
+The judge sees the source and the translation only---no reference
+(product use case: online QE / WMT AutoEval Task~3).
+A reference-conditioned ablation remains future work.
+
+For each segment the judge returns:
+(i)~five sub-dimension scores on a 1--10 scale;
+(ii)~the scalar aggregate (fixed weighted sum);
+(iii)~one main \texttt{issue\_type} from
+\{\texttt{calque}, \texttt{register\_mismatch}, \texttt{false\_friend},
+\texttt{idiom\_literal}, \texttt{collocation}, \texttt{discourse\_marker},
+\texttt{none}\};
+(iv)~severity; (v)~problem phrase; (vi)~suggested fix;
+(vii)~confidence fields (\texttt{low\_confidence}, \texttt{max\_score\_diff}).
+
+\textbf{Double-pass.}
+The judge scores each segment twice independently; we average the two aggregates.
+A single-pass control shows the second call adds nothing measurable
+($\Delta\rho{=}{+}0.007$, CI $[{-}0.011,{+}0.026]$).
+
+Discourse contributes near-zero to rank correlation on our masks; we keep it as
+a diagnostic channel. Weights stay fixed.
+
+\section{Experimental setup}
+\label{sec:setup}
+Section~\ref{sec:expmap} lists experiments; Section~\ref{sec:fair} defines masks
+and statistics; Section~\ref{sec:judges} names judges;
+Section~\ref{sec:prereg} states reproduction gates.
+
+\subsection{Overview of experiments}
+\label{sec:expmap}
+Table~\ref{tab:expmap} maps each experiment to its data, sample size, and the
+question it is meant to answer.
+Exp.~2 and Exp.~3 stay separate so year-fixed depth and cross-year scope each
+keep their own takeaway.
+
+\begin{table}[t]
+\centering
+\scriptsize
+\caption{Experiment map. Exp.~2 = single-year depth; Exp.~3 = cross-year scope.}
+\label{tab:expmap}
+\begin{tabularx}{\columnwidth}{@{}c>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}Xc>{\raggedright\arraybackslash}X@{}}
+\toprule
+\# & Name & Data & $n$ & Main question \\
+\midrule
+1 & WMT25 ESA & WMT25, 12 pairs & 3,526 & vs official WMT25 metrics \\
+2 & WMT22 MQM & WMT22, 3 pairs & 808 & scale/structure at fixed year \\
+3 & WMT22--24 MQM & 9 year$\times$pair cells & 2,628 & cross-year stability \\
+4 & Framework $\times$ backbone & WMT22 + WMT25 & 808 / 3,526 & judge vs framework \\
+\bottomrule
+\end{tabularx}
+
+\end{table}
+
+
+\subsection{Fair-comparison protocol}
+\label{sec:fair}
+\textbf{Language pairs (WMT25 fair subset).}
+EN$\to$ar\_EG, bho\_IN, cs\_CZ, et\_EE, is\_IS, it\_IT, ja\_JP, mas\_KE,
+ru\_RU, sr\_Cyrl\_RS, uk\_UA, zh\_CN (12 pairs; per-pair $n$ in Table~\ref{tab:1c}).
+
+\textbf{WMT25.}
+We join official automatic scores with \FS{} on aligned segments.
+Starting from 4,560 scored rows, the primary fair mask keeps a row only if human
+ESA and all of \{\FS{}, GEMBA-ESA, MetricX-24, XCOMET, CometKiwi\} are non-null
+$\rightarrow n{=}3{,}526$ (retention 66.3\%--90.0\% by pair).
+chrF++ is not part of this mask (missing for EN$\to$it\_IT); we report chrF++ on
+its own subset ($n{=}4{,}200$).
+
+\textbf{MQM.}
+Join on (\texttt{year}, \texttt{pair}, \texttt{seg\_id}, \texttt{system\_id});
+keep segments where every compared metric is non-null.
+
+\textbf{Surface baseline on WMT22--24 (Exp.~3).}
+We recompute chrF++ with sacrebleu (\texttt{CHRF}, \texttt{word\_order=2}) using
+\texttt{mt-metrics-eval-v2} \texttt{refA} aligned by exact source-text match.
+Result: Spearman $\rho{=}0.290$, PA${=}0.626$, $n{=}2{,}553$
+(83 fair rows lack an exact source match and are omitted from the chrF++ column
+only). This replaces the previous $n{=}818$ / WMT22-keys-only figure
+($\rho{=}0.351$, PA${=}0.653$).
+
+\textbf{Agreement statistics.}
+Spearman $\rho$ (primary), Kendall $\tau$, and pairwise accuracy
+PA${=}(\tau{+}1)/2$.
+Headline $\rho$/$\tau$/PA are pooled unless a table says otherwise.
+Table~\ref{tab:1c} also reports per-pair $\rho$ and a macro-average.
+
+\textbf{Uncertainty.}
+Bootstrap 95\% intervals by segment resampling; paired bootstrap for metric
+differences.
+
+\subsection{Judges per experiment}
+\label{sec:judges}
+Table~\ref{tab:judges} lists the judge backbones used in each experiment.
+Where a protocol is run twice on the same segment, we average the two
+independent passes ($k{=}2$).
+
+\begin{table}[t]
+\centering
+\scriptsize
+\caption{Judges used per experiment.}
+\label{tab:judges}
+\begin{tabularx}{\columnwidth}{>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X}
+\toprule
+Experiment & Judges & Notes \\
+\midrule
+Exp~1 (WMT25) & gemini-3-flash-preview (primary); gemini-3.5-flash, GPT-4.1, GPT-4o & $k{=}2$ passes, then average \\
+Exp~2--3 (MQM) & GPT-5, gemini-3-flash, GPT-4.1, GPT-4o, Opus~4.7 & three \FS{} variants where available \\
+Grid (\S\ref{sec:grid}) & gemini-3-flash \& GPT-4.1 on WMT25; GPT-5/4.1/4o on MQM & frameworks $\times$ judges \\
+\bottomrule
+\end{tabularx}
+
+\end{table}
+
+
+\subsection{Baseline validation and pre-registration}
+\label{sec:prereg}
+Where an official score exists, our copy of a metric must match it before we
+trust the copy.
+For GEMBA-ESA the bar was Spearman $0.85$ against official GEMBA-ESA--GPT-4.1 on
+a stratified 400-segment subset.
+Our copy reached only $0.784$; we never replace an official GEMBA-ESA cell with
+our copy.
+Our copy appears only where no official score exists (Gemini backbone), and
+captions mark those rows.
+
+For GEMBA-MQM, no official scores exist for our MQM years.
+We treat MQM cohorts as an internal ablation of \FS{} variants, with one
+reference-based external anchor (WMT22 GPT-4 release).
+The decisive WMT25 contrast was pre-registered (mask, statistics, outcome
+meanings) before the run finished.
+
+\section{Experiment 1: WMT25 ESA}
+\label{sec:exp1}
+Fair subset: $n{=}3{,}526$ segments across the 12 pairs in
+Section~\ref{sec:fair}.
+Learned baselines include MetricX-24 \cite{juraska-etal-2024-metricx}, XCOMET \cite{guerreiro-etal-2024-xcomet}, and CometKiwi \cite{rei-etal-2022-cometkiwi}; the surface baseline is chrF++ \cite{popovic-2015-chrf}.
+
+\begin{table}[t]
+\centering
+\scriptsize
+\caption{WMT25 ESA: segment-level Spearman $\rho$ with human ESA (primary mask $n{=}3{,}526$; chrF++ on its own subset). GEMBA-ESA on gemini-3-flash is our reimplementation (\S\ref{sec:prereg}); GEMBA-ESA on GPT-4.1 is official. $^*$On GPT-4.1, official GEMBA exceeds \FS{} by $\Delta\rho{\approx}0.045$ pooled; macro-averaged gap ${\approx}0$. Matched Gemini protocols are tied.}
+\label{tab:1}
+\begin{tabularx}{\columnwidth}{>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}Xcc}
+\toprule
+Backbone & Framework / metric & Spearman $\rho$ & $n$ \\
+\midrule
+gemini-3-flash-preview & \FS{} & 0.613 & 3526 \\
+gemini-3-flash-preview & GEMBA-ESA (ours) & 0.606 & 3526 \\
+gemini-3.5-flash & \FS{} & 0.570 & 3521 \\
+GPT-4.1 & GEMBA-ESA (official) & 0.547$^*$ & 3526 \\
+GPT-4.1 & \FS{} & 0.503$^*$ & 3526 \\
+GPT-4o & \FS{} & 0.470 & 3523 \\
+(learned) & MetricX-24-Hybrid-XL & 0.518 & 3526 \\
+(learned) & XCOMET-XL & 0.391 & 3526 \\
+(learned) & CometKiwi-XL & 0.337 & 3526 \\
+(surface) & chrF++ (own subset) & 0.281 & 4200 \\
+\bottomrule
+\end{tabularx}
+
+\end{table}
+
+\begin{table}[t]
+\centering
+\scriptsize
+\caption{Pairwise accuracy with bootstrap 95\% CIs (primary mask).}
+\label{tab:1a}
+\begin{tabularx}{\columnwidth}{>{\raggedright\arraybackslash}Xccc}
+\toprule
+Metric & PA & 95\% CI & $n$ \\
+\midrule
+\FS{} / gemini-3-flash & 0.722 & [0.713, 0.732] & 3,526 \\
+GEMBA-ESA / gemini-3-flash & 0.730 & [0.720, 0.739] & 3,526 \\
+\FS{} / gemini-3.5-flash & 0.709 & [0.699, 0.719] & 3,521 \\
+GEMBA-ESA / GPT-4.1 (official) & 0.703 & [0.693, 0.713] & 3,526 \\
+\FS{} / GPT-4.1 & 0.679 & [0.668, 0.689] & 3,526 \\
+\FS{} / GPT-4o & 0.669 & [0.658, 0.679] & 3,523 \\
+MetricX-24-Hybrid-XL & 0.685 & [0.675, 0.695] & 3,526 \\
+XCOMET-XL & 0.638 & [0.627, 0.648] & 3,526 \\
+CometKiwi-XL & 0.617 & [0.606, 0.629] & 3,526 \\
+chrF++ (own subset) & 0.599 & [0.589, 0.609] & 4,200 \\
+\bottomrule
+\end{tabularx}
+
+\end{table}
+
+\begin{table}[t]
+\centering
+\scriptsize
+\caption{Paired bootstrap on PA difference vs \FS{} / gemini-3-flash.}
+\label{tab:1b}
+\begin{tabularx}{\columnwidth}{>{\raggedright\arraybackslash}Xccc}
+\toprule
+Baseline & $\Delta$PA & $p$-value & Sig.\ ($\alpha{=}0.05$)? \\
+\midrule
+GEMBA-ESA / gemini-3-flash & $-0.0078$ & 0.018 & Yes \\
+GEMBA-ESA / GPT-4.1 (official) & $+0.0195$ & $<0.001$ & Yes \\
+MetricX-24-Hybrid-XL & $+0.0369$ & $<0.001$ & Yes \\
+XCOMET-XL & $+0.0846$ & $<0.001$ & Yes \\
+CometKiwi-XL & $+0.1048$ & $<0.001$ & Yes \\
+chrF++ (joint subset) & $+0.1287$ & $<0.001$ & Yes \\
+\bottomrule
+\end{tabularx}
+
+\end{table}
+
+\begin{table}[t]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{2pt}
+
+\caption{Per-pair Spearman $\rho$ (primary mask). syn\_dist: URIEL syntax\_knn cosine from English \cite{littell-etal-2017-uriel}. GEMBA-ESA = official GPT-4.1; MetricX = MetricX-24.}
+\label{tab:1c}
+\begin{tabularx}{\columnwidth}{>{\raggedright\arraybackslash}Xccccc}
+\toprule
+Pair & $n$ & \shortstack{syn\\dist} & \FS{} & \shortstack{GEMBA\\ESA} & MetricX \\
+\midrule
+EN$\to$ar\_EG & 342 & 0.366 & 0.415 & 0.374 & $-0.303$ \\
+EN$\to$bho\_IN & 288 & 0.337 & 0.589 & 0.401 & 0.300 \\
+EN$\to$cs\_CZ & 304 & 0.335 & 0.522 & 0.401 & 0.388 \\
+EN$\to$et\_EE & 288 & 0.195 & 0.632 & 0.503 & 0.326 \\
+EN$\to$is\_IS & 252 & 0.154 & 0.797 & 0.738 & 0.570 \\
+EN$\to$it\_IT & 252 & 0.115 & 0.587 & 0.435 & 0.476 \\
+EN$\to$ja\_JP & 288 & 0.456 & 0.331 & 0.377 & 0.287 \\
+EN$\to$mas\_KE & 306 & 0.431 & 0.231 & 0.389 & 0.061 \\
+EN$\to$ru\_RU & 288 & 0.183 & 0.468 & 0.353 & 0.380 \\
+EN$\to$sr\_Cyrl\allowbreak\_RS & 306 & 0.185 & 0.624 & 0.543 & 0.335 \\
+EN$\to$uk\_UA & 342 & 0.153 & 0.422 & 0.379 & 0.323 \\
+EN$\to$zh\_CN & 270 & 0.268 & 0.348 & 0.344 & 0.318 \\
+MACRO-AVG & 3526 & --- & 0.497 & 0.437 & 0.288 \\
+POOLED & 3526 & --- & 0.613 & 0.547 & 0.518 \\
+\bottomrule
+\end{tabularx}
+
+\end{table}
+
+
+\FS{}-Gemini wins 8 of 11 pairs by Spearman $\rho$ in the original per-pair sweep.
+Losses: EN$\to$mas\_KE and EN$\to$ja\_JP (GEMBA-ESA leads by $\rho$) and
+EN$\to$ar\_EG (chrF++ leads by $\rho$ on its subset; \FS{} still leads by PA).
+
+\begin{table}[t]
+\centering
+\scriptsize
+\caption{Typology (exploratory): Spearman correlation between syntactic distance and \FS{} per-pair PA advantage. Primary mask, 12 pairs; chrF++ on joint subset (11 pairs). Nominal $p$ over six tests.}
+\label{tab:1d}
+\begin{tabularx}{\columnwidth}{>{\raggedright\arraybackslash}Xcc}
+\toprule
+Baseline & $\rho(\mathrm{syn\_dist},\mathrm{PA\_adv})$ & $p$-value \\
+\midrule
+GEMBA-ESA / gemini-3-flash & $+0.615$ & 0.033 \\
+chrF++ (11 pairs) & $-0.636$ & 0.035 \\
+GEMBA-ESA / GPT-4.1 (official) & $-0.371$ & 0.236 \\
+CometKiwi-XL & $+0.154$ & 0.633 \\
+MetricX-24-Hybrid-XL & $-0.063$ & 0.846 \\
+XCOMET-XL & $+0.007$ & 0.983 \\
+\bottomrule
+\end{tabularx}
+
+\end{table}
+
+
+Against matched GEMBA-ESA on Gemini, the correlation is positive
+($\rho{=}{+}0.62$, nominal $p{=}0.03$): the structured rubric helps most where
+the shared judge is weakest (EN$\to$ja\_JP is a visible exception).
+Against official GPT-4.1-backed GEMBA-ESA the sign flips ($-0.37$, n.s.).
+With 12 points and six tests, these are exploratory.
+
+\section{Experiment 2: WMT22 MQM}
+\label{sec:exp2}
+\textbf{Question.}
+Holding the year fixed (WMT22 MQM, $n{=}808$, en--de / zh--en / en--ru), do
+scoring scale (positive 1--10 vs MQM-style negative) and structure (structured
+rubric vs flat) change agreement when the judge backbone varies?
+
+We separate confounds across three tables.
+Table~\ref{tab:2a1} is \FS{}-only;
+Table~\ref{tab:2a2} would be matched vs GEMBA (cells empty: no API credits / no
+official GEMBA-MQM);
+Table~\ref{tab:2a3} lists confounded external anchors only.
+
+\begin{table}[t]
+\centering
+\scriptsize
+\caption{WMT22 MQM (fair $n{=}808$): \FS{} family only. Cells: Spearman $\rho$ / PA. --- = not run.}
+\label{tab:2a1}
+\begin{tabularx}{\columnwidth}{>{\raggedright\arraybackslash}Xccc}
+\toprule
+Backbone & Structured (1--10) & MQM-style & Flat \\
+\midrule
+GPT-5 & 0.624 / 0.780 & 0.601 / 0.766 & 0.614 / 0.775 \\
+Opus 4.7 & 0.587 / 0.761 & --- & --- \\
+Gemini-3-flash & 0.566 / 0.750 & 0.586 / 0.755 & --- \\
+GPT-4o & 0.526 / 0.732 & --- & --- \\
+GPT-4.1 & 0.507 / 0.724 & --- & --- \\
+\bottomrule
+\end{tabularx}
+
+\end{table}
+
+
+\textit{Reading (2a1).}
+On GPT-5, structured ${\approx}$ flat ${\approx}$ MQM-style
+($0.624$ / $0.614$ / $0.601$).
+Backbone rank within structured \FS{}:
+GPT-5 $>$ Opus~4.7 $>$ Gemini-3-flash $>$ GPT-4o $>$ GPT-4.1.
+
+\begin{table}[t]
+\centering
+\scriptsize
+\caption{Matched-backbone \FS{} vs GEMBA (QE). All GEMBA cells are --- (no credits / no official GEMBA-MQM). Matched Gemini contrast is on WMT25 (\S\ref{sec:grid}).}
+\label{tab:2a2}
+\begin{tabularx}{\columnwidth}{>{\raggedright\arraybackslash}Xcc}
+\toprule
+Backbone & \FS{} (best) & GEMBA (same backbone) \\
+\midrule
+GPT-5 & 0.624 & --- \\
+Opus 4.7 & 0.587 & --- \\
+Gemini-3-flash & 0.566 & --- \\
+GPT-4o & 0.526 & --- \\
+GPT-4.1 & 0.507 & --- \\
+\bottomrule
+\end{tabularx}
+
+\end{table}
+
+\begin{table}[t]
+\centering
+\scriptsize
+\caption{External anchors (confounded; orientation only).}
+\label{tab:2a3}
+\begin{tabularx}{\columnwidth}{>{\raggedright\arraybackslash}Xcc>{\raggedright\arraybackslash}X}
+\toprule
+Metric & Spearman $\rho$ & PA & Main confounds vs \FS{}-GPT5 \\
+\midrule
+GEMBA-SQM-GPT4-refA & 0.515 & 0.698 & GPT-4 $\neq$ GPT-5; has ref \\
+GEMBA-DA-GPT4-refA & 0.470 & 0.673 & same \\
+chrF++ & 0.350 & 0.653 & surface metric \\
+\bottomrule
+\end{tabularx}
+
+\end{table}
+
+\begin{table}[t]
+\centering
+\scriptsize
+\caption{Bootstrap 95\% CI for Spearman $\rho$ (WMT22 MQM).}
+\label{tab:2b}
+\begin{tabularx}{\columnwidth}{>{\raggedright\arraybackslash}Xccc}
+\toprule
+Metric & $\rho$ & 95\% CI & Block \\
+\midrule
+\FS{}-GPT5 & 0.624 & [0.582, 0.666] & \FS{} \\
+\FS{}-MQM-flat-GPT5 & 0.614 & [0.572, 0.663] & \FS{} \\
+\FS{}-MQM-GPT5 & 0.601 & [0.557, 0.644] & \FS{} \\
+\FS{}-Opus4.7 & 0.587 & [0.541, 0.631] & \FS{} \\
+\FS{}-gemini-3.5-flash & 0.587 & [0.541, 0.632] & \FS{} \\
+\FS{}-MQM-Gemini & 0.575 & [0.525, 0.619] & \FS{} \\
+\FS{}-GPT4o & 0.526 & [0.477, 0.579] & \FS{} \\
+\FS{}-GPT4.1 & 0.507 & [0.454, 0.560] & \FS{} \\
+GEMBA-SQM-GPT4-refA & 0.515 & [0.463, 0.569] & External \\
+GEMBA-DA-GPT4-refA & 0.470 & [0.416, 0.529] & External \\
+chrF++ & 0.350 & [0.290, 0.409] & External \\
+\bottomrule
+\end{tabularx}
+
+\end{table}
+
+\begin{table}[t]
+\centering
+\scriptsize
+\caption{Paired bootstrap (PA), WMT22 MQM (confounded comparisons).}
+\label{tab:2c}
+\begin{tabularx}{\columnwidth}{>{\raggedright\arraybackslash}Xccc}
+\toprule
+Comparison & $\Delta$PA & $p$-value & Matched? \\
+\midrule
+\FS{}-GPT5 vs GEMBA-SQM-GPT4-refA & $+0.0818$ & 0.0035 & No \\
+\FS{}-MQM-Gemini vs GEMBA-SQM-GPT4-refA & $+0.0511$ & 0.0008 & No \\
+\bottomrule
+\end{tabularx}
+
+\end{table}
+
+
+\paragraph{Takeaways (Experiment~2).}
+On GPT-5, positive structured, MQM-style, and flat variants are close
+(Table~\ref{tab:2a1}).
+Within \FS{}, the judge model moves agreement more than scale/structure
+(GPT-5 vs GPT-4.1: $0.624$ vs $0.507$).
+Matched vs GEMBA on WMT22 MQM is unavailable here
+(Table~\ref{tab:2a2}); do not read Tables~\ref{tab:2a3}--\ref{tab:2c} as
+protocol-matched evidence.
+Primary matched claim remains WMT25 same-Gemini (Section~\ref{sec:grid}).
+
+\section{Experiment 3: WMT22--24 MQM}
+\label{sec:exp3}
+\textbf{Question.}
+Do the WMT22 patterns from Experiment~2 remain when we expand to three MQM years
+(extended fair subset: $n{=}2{,}628$ for neural \FS{} variants)?
+
+\textbf{Surface baseline.}
+chrF++ recomputed as in Section~\ref{sec:fair}:
+$\rho{=}0.290$, PA${=}0.626$, $n{=}2{,}553$.
+On the WMT22 slice alone the recomputed scores reproduce the previous release
+figure ($\rho{\approx}0.351$, PA${\approx}0.653$, $n{=}818$).
+
+\begin{table}[t]
+\centering
+\scriptsize
+\caption{Segment-level correlation on WMT22--24 MQM (extended). Neural: fair $n{=}2{,}628$. chrF++: source-aligned refA subset $n{=}2{,}553$.}
+\label{tab:3a}
+\begin{tabularx}{\columnwidth}{>{\raggedright\arraybackslash}Xccc}
+\toprule
+Metric & Spearman $\rho$ & PA & $n$ \\
+\midrule
+\FS{}-MQM-flat-GPT5 & 0.584 & 0.764 & 2628 \\
+\FS{}-GPT5 & 0.551 & 0.746 & 2628 \\
+\FS{}-Gemini & 0.537 & 0.737 & 2628 \\
+\FS{}-MQM-Gemini & 0.519 & 0.735 & 2628 \\
+\FS{}-MQM-GPT5 & 0.501 & 0.726 & 2628 \\
+chrF++ (recomputed) & 0.290 & 0.626 & 2553 \\
+\bottomrule
+\end{tabularx}
+
+\end{table}
+
+
+\textit{Reading (3a).}
+Flat GPT-5 has the highest $\rho$ on the extended pool ($0.584$).
+All \FS{} rows remain well above recomputed chrF++ ($\rho{=}0.290$).
+Adding WMT23/24 softens the surface baseline relative to the WMT22-only figure
+($0.351{\rightarrow}0.290$).
+
+\begin{table}[t]
+\centering
+\scriptsize
+\caption{Paired bootstrap (PA), extended set.}
+\label{tab:3b}
+\begin{tabularx}{\columnwidth}{@{}>{\raggedright\arraybackslash}Xcc@{}}
+\toprule
+Comparison & $\Delta$PA & $p$-value \\
+\midrule
+\FS{}-GPT5 vs \FS{}-MQM-flat-GPT5 & $-0.0188$ & 0.2175 (n.s.) \\
+\FS{}-GPT5 vs \FS{}-MQM-Gemini & $+0.0283$ & 0.0525 (borderline) \\
+\bottomrule
+\end{tabularx}
+
+\end{table}
+
+\begin{table}[t]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{2pt}
+
+\caption{Per year$\times$pair winners (Spearman $\rho$). \FS{}-GPT5 and flat-GPT5 shown for reference.}
+\label{tab:3c}
+\begin{tabularx}{\columnwidth}{cc>{\raggedright\arraybackslash}Xccc}
+\toprule
+Year & Pair & Winner & $\rho$ & \FS{}-GPT5 & flat-GPT5 \\
+\midrule
+wmt22 & en--de & flat-GPT5 & 0.690 & 0.545 & 0.690 \\
+wmt22 & en--ru & \FS{}-GPT5 & 0.674 & 0.674 & 0.652 \\
+wmt22 & zh--en & \FS{}-GPT5 & 0.675 & 0.675 & 0.519 \\
+wmt23 & en--de & \FS{}-MQM-Gemini & 0.843 & 0.738 & 0.742 \\
+wmt23 & he--en & flat-GPT5 & 0.637 & 0.546 & 0.637 \\
+wmt23 & zh--en & \FS{}-GPT4o & 0.624 & 0.514 & 0.612 \\
+wmt24 & en--de & flat-GPT5 & 0.531 & 0.401 & 0.531 \\
+wmt24 & en--es & flat-GPT5 & 0.493 & 0.404 & 0.493 \\
+wmt24 & ja--zh & \FS{}-GPT4.1 & 0.585 & 0.497 & 0.501 \\
+\bottomrule
+\end{tabularx}
+
+\end{table}
+
+
+\paragraph{Takeaways (Experiment~3).}
+\begin{itemize}
+\item On the extended set the ranking changes relative to Experiment~2
+  (WMT22-only): flat GPT-5 is above structured GPT-5 in Spearman $\rho$
+  ($0.584$ vs $0.551$), but the $\Delta$PA is non-significant
+  (Table~\ref{tab:3b}).
+\item Winners differ by year$\times$pair
+  (Table~\ref{tab:3c}); no single \FS{} variant is best in every cell.
+\item Recomputed chrF++ ($n{=}2{,}553$) stays well below the \FS{} rows
+  ($\rho{=}0.290$ vs ${\ge}0.50$).
+\item Quote MQM results with the year scope: WMT22-only and WMT22--24 extended
+  are not interchangeable.
+\end{itemize}
+
+\section{Experiment 4: Backbone ablation and framework$\times$backbone grid}
+\label{sec:exp4}
+Experiments~1--3 often change metrics while the judge varies across rows.
+This section separates the two effects.
+
+\begin{table}[t]
+\centering
+\scriptsize
+\caption{\FS{} standard deviation by backbone (1--10 scale).}
+\label{tab:4a}
+\begin{tabularx}{\columnwidth}{>{\raggedright\arraybackslash}Xcc}
+\toprule
+Backbone & std (1--10) & $n$ non-null \\
+\midrule
+\FS{}-GPT5 & 0.898 & 2,737 \\
+\FS{}-Opus4.7 & 1.100 & 2,727 \\
+\FS{}-GPT4.1 & 1.118 & 2,757 \\
+\FS{}-GPT4o & 1.276 & 2,750 \\
+\FS{}-Gemini & 1.731 & 2,758 \\
+\bottomrule
+\end{tabularx}
+
+\end{table}
+
+
+\textit{Observation.}
+GPT-5 produces a narrower score spread while correlating more strongly with
+human judgments (interpretation, not a causal claim).
+
+\begin{table}[t]
+\centering
+\scriptsize
+\caption{OpenRouter extended ablation ($n{\approx}2{,}598$).}
+\label{tab:4b}
+\begin{tabularx}{\columnwidth}{>{\raggedright\arraybackslash}Xccc}
+\toprule
+Label & Spearman $\rho$ & PA & $n$ \\
+\midrule
+\FS{}-MQM-flat-GPT5 & 0.584 & 0.765 & 2,598 \\
+\FS{}-GPT5 & 0.553 & 0.747 & 2,598 \\
+\FS{}-Gemini & 0.538 & 0.738 & 2,598 \\
+\FS{}-Opus4.7 & 0.532 & 0.736 & 2,598 \\
+\FS{}-GPT4.1 & 0.532 & 0.737 & 2,598 \\
+\FS{}-GPT4o & 0.530 & 0.737 & 2,598 \\
+\bottomrule
+\end{tabularx}
+
+\end{table}
+
+
+\subsection{Framework by backbone grid: primary matched contrasts}
+\label{sec:grid}
+This subsection crosses frameworks with backbones on the same segments and the
+same primary mask as Experiment~1 ($n{=}3{,}526$).
+
+\begin{table}[t]
+\centering
+\scriptsize
+\caption{Matched contrasts (primary mask). GEMBA on Gemini is our reimplementation (\S\ref{sec:prereg}).}
+\label{tab:4c}
+\begin{tabularx}{\columnwidth}{@{}>{\raggedright\arraybackslash}Xcc>{\raggedright\arraybackslash}X@{}}
+\toprule
+Contrast & $\Delta\rho$ (pooled) & 95\% CI & Reading \\
+\midrule
+\FS{} vs GEMBA-ESA, both gemini-3-flash & $+0.007$ & $[-0.009,+0.023]$ & Matched; CI covers 0 \\
+Same, macro-avg (12 pairs) & $+0.008$ & $[-0.015,+0.029]$ & Matched; CI covers 0 \\
+GEMBA Gemini (ours) vs official GPT-4.1 & $+0.058$ & $[+0.038,+0.077]$ & Mostly backbone \\
+\FS{}-Gemini vs official GEMBA GPT-4.1 & $+0.065$ & $[+0.046,+0.084]$ & Headline \\
+\FS{} vs GEMBA-ESA, both GPT-4.1 & $-0.045$ & $[-0.065,-0.024]$ & Matched GPT-4.1 \\
+\bottomrule
+\end{tabularx}
+
+\end{table}
+
+
+In short: the ${+}0.065$ headline margin versus official GEMBA-ESA--GPT-4.1
+splits into about ${+}0.058$ from the judge model and ${+}0.007$ from the
+framework; the framework part has an interval covering zero.
+
+\subsection{Variance decomposition}
+Table~\ref{tab:7d} attributes variance in Spearman $\rho$ to backbone,
+framework, and their interaction on three cohorts.
+
+\begin{table}[t]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{2pt}
+
+\caption{Two-way split of variance in Spearman $\rho$; bootstrap 95\% CIs omitted for space (see full draft).}
+\label{tab:7d}
+\begin{tabularx}{\columnwidth}{>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}Xccc}
+\toprule
+Cohort & Grid & Backbone & Framework & Interaction \\
+\midrule
+WMT22 & 3 var.$\times$3 bb ($n{=}815$) & 97.2\% & 0.5\% & 2.3\% \\
+WMT22--24 & 3$\times$3 ($n{=}2{,}628$) & 42.5\% & 31.8\% & 25.7\% \\
+WMT25 & 2$\times$2 ($n{=}3{,}526$) & 87.3\% & 4.4\% & 8.3\% \\
+\bottomrule
+\end{tabularx}
+
+\end{table}
+
+
+On WMT25 the backbone share stays high.
+Scale: the positive 1--10 rubric beats the MQM-style negative variant on all four
+backbones (every interval excludes zero).
+Structure: the structured variant moves by $0.022$ across three shared backbones,
+against $0.128$ for the flat single-score variant.
+
+\subsection{The full MQM matrix}
+Table~\ref{tab:7e} collects MQM cells from Experiments~2--4 so framework and
+judge can be read together on the same grid
+(\FS{} = positive structured; FluencyScore-MQM = same rubric, negative scale;
+flat = single-score negative variant; n/a = not run).
+
+\begin{table}[t]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{1.5pt}
+
+\caption{Segment-level Spearman $\rho$ with human MQM. $^\dagger$Recomputed chrF++ on extended set ($n{=}2{,}553$).}
+\label{tab:7e}
+
+\begin{tabularx}{\columnwidth}{>{\raggedright\arraybackslash}Xcccccc}
+\toprule
+Backbone & \shortstack{FS\\(22)} & \shortstack{MQM\\(22)} & \shortstack{flat\\(22)} & \shortstack{FS\\(22--24)} & \shortstack{MQM\\(22--24)} & \shortstack{flat\\(22--24)} \\
+\midrule
+gemini-3-flash & 0.576 & 0.591 & n/a & 0.540 & 0.519 & n/a \\
+GPT-5 & 0.628 & 0.603 & 0.617 & 0.553 & 0.502 & 0.584 \\
+GPT-4.1 & 0.508 & 0.522 & 0.508 & 0.531 & 0.463 & 0.453 \\
+GPT-4o & 0.533 & 0.518 & 0.533 & 0.530 & 0.486 & 0.498 \\
+Opus 4.7 & 0.589 & n/a & n/a & 0.531 & n/a & n/a \\
+GEMBA-SQM\-GPT4\-refA & 0.520 & n/a & n/a & n/a & n/a & n/a \\
+chrF++ & 0.350 & n/a & n/a & 0.290$^\dagger$ & n/a & n/a \\
+\bottomrule
+\end{tabularx}
+
+\end{table}
+
+
+\section{Error analysis: detects vs misses}
+\label{sec:error}
+\textbf{Roadmap.}
+\S\ref{sec:ea-method} defines disagreement;
+\S\ref{sec:misses} shows misses;
+\S\ref{sec:detects} shows detects;
+\S\ref{sec:collapse} covers MQM variance collapse;
+\S\ref{sec:fixes} lists fix directions.
+
+
+\begin{table}[t]
+\centering
+\scriptsize
+\caption{Issue-type taxonomy (illustrative).}
+\label{tab:8a}
+\begin{tabularx}{\columnwidth}{@{}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
+\toprule
+Issue type & Meaning & Example \\
+\midrule
+calque & Source-mirrored structure & EN ``make a decision'' $\to$ RU \emph{sdelat' reshenie} \\
+register\_mismatch & Wrong style/dialect/locale & Formal ``Good day, sir'' in a casual vlog \\
+false\_friend & Look-alike wrong meaning & ``magazine'' $\to$ \emph{magazin} (shop) \\
+idiom\_literal & Idiom word-by-word & ``raining cats and dogs'' literal \\
+collocation & Unnatural combination & ``heavy rain'' $\to$ \emph{tyazhyolyy dozhd'} \\
+discourse\_marker & Wrong connector/filler & ``well,'' $\to$ literal \emph{khorosho,} \\
+none & No fluency issue flagged & n/a \\
+\bottomrule
+\end{tabularx}
+
+\end{table}
+
+
+\subsection{Method}
+\label{sec:ea-method}
+Fair subsets: WMT25 ESA $n{=}3{,}526$; MQM disagreement slice $n{=}824$.
+\textbf{Disagreement $|\Delta z|$.}
+For each segment we $z$-score \FS{} and the human score within the analysis
+corpus, then take $|z_{\mathrm{FS}}-z_{\mathrm{human}}|$.
+Misses: top-1000 largest-$|\Delta z|$ segments.
+Detects: top-100 smallest-$|\Delta z|$ segments (deprioritizing ceiling--ceiling).
+
+\subsection{What \FS{} misses (overestimate)}
+\label{sec:misses}
+Among the top-1000 largest-disagreement segments, \FS{} overestimates quality in
+46.0\% of WMT25 ESA cases and about 39.7\% of WMT22--24 MQM cases.
+
+\begin{table}[t]
+\centering
+\scriptsize
+\caption{Issue-type breakdown of WMT25 ESA top-1000 disagreements.}
+\label{tab:5a}
+\begin{tabularx}{\columnwidth}{>{\raggedright\arraybackslash}Xccc}
+\toprule
+issue\_type & count & \% over & mean $|\Delta z|$ \\
+\midrule
+calque & 467 & 28.9\% & 1.27 \\
+collocation & 97 & 54.6\% & 1.40 \\
+discourse\_marker & 11 & 36.4\% & 1.22 \\
+false\_friend & 57 & 22.8\% & 1.27 \\
+idiom\_literal & 104 & 41.3\% & 1.41 \\
+none & 69 & 98.6\% & 3.08 \\
+register\_mismatch & 195 & 73.8\% & 1.49 \\
+\bottomrule
+\end{tabularx}
+
+\end{table}
+
+\begin{table}[t]
+\centering
+\scriptsize
+\caption{Headline failure modes (WMT25 ESA top-1000).}
+\label{tab:fail}
+\begin{tabularx}{\columnwidth}{c>{\raggedright\arraybackslash}Xcc>{\raggedright\arraybackslash}X}
+\toprule
+\# & Failure mode & WMT25 & Direction & Interpretation \\
+\midrule
+1 & none & 69 & ${\sim}99\%$ OVER & Fluency bias \\
+2 & register\_mismatch & 195 & ${\sim}74\%$ OVER & Dialect/locale blindness \\
+3 & calque & 467 & ${\sim}29\%$ OVER & Dual mode \\
+4 & Q1 collapse & cross & mixed & Worst human quintile \\
+5 & low-resource pairs & mas/bho & noisy & Weak correlation \\
+\bottomrule
+\end{tabularx}
+
+\end{table}
+
+
+\paragraph{Miss examples.}
+Register miss (EN$\to$ar\_EG): human ESA${=}0.0$, \FS${=}4.26$ (MSA instead of
+Egyptian).
+None-issue / scale artifact (EN$\to$sr\_Cyrl\allowbreak\_RS): human ESA${=}100.0$,
+\FS${=}8.95$ (both like the adaptation; $|\Delta z|$ still large).
+
+\paragraph{Worked judge records.}
+(1)~Calque; agree: EN$\to$ru\_RU, human ESA $26.5$, \FS{} $1.4$ (Minecraft
+``shulker boxes'').
+(2)~Register; overestimate: EN$\to$ru\_RU, human $42.5$, minor on \emph{Da, ser}.
+(3)~None; overestimate: EN$\to$it\_IT, human $49.0$ vs pair median $85.5$,
+\FS{} $6.1$ (ASR cleanup rewarded).
+
+\subsection{What \FS{} detects}
+\label{sec:detects}
+
+\begin{table}[t]
+\centering
+\scriptsize
+\caption{Agreement-slice summary statistics.}
+\label{tab:detect}
+\begin{tabularx}{\columnwidth}{>{\raggedright\arraybackslash}Xc}
+\toprule
+Metric & Value \\
+\midrule
+WMT25 fair $n$ & 3274 \\
+Mean $|\Delta z|$ \FS{} (all fair) & 0.777 \\
+Mean $|\Delta z|$ GEMBA (all fair) & 0.650 \\
+Top-100 agreement mean $|\Delta z|$ & 0.024 \\
+\% rows \FS{} closer than GEMBA (fair) & 43.2\% \\
+Top-100: \FS{} closer than GEMBA & 100\% \\
+MQM top-100 agreement mean $|\Delta z|$ & 0.058 \\
+\bottomrule
+\end{tabularx}
+
+\end{table}
+
+
+On the best-agreement slice \FS{} is consistently closer to human than GEMBA
+(100\% in the WMT25 ESA top-100).
+Typical detect: human low, \FS{} low, \texttt{issue\_type} correctly identified.
+
+\subsection{MQM three-judge: variance collapse}
+\label{sec:collapse}
+
+\begin{table}[t]
+\centering
+\scriptsize
+\caption{FluencyScore-MQM (Gemini): 41.6\% of mass at $\ge$98---ceiling collapse.}
+\label{tab:collapse}
+\begin{tabularx}{\columnwidth}{>{\raggedright\arraybackslash}Xccc}
+\toprule
+mode / judge & $n$ & \% $\ge$98 & std (0--100) \\
+\midrule
+\FS{} / Opus4.7 & 2727 & 0.6\% & 18.32 \\
+\FS{} / GPT5 & 2737 & 0.4\% & 17.03 \\
+\FS{}-MQM / Gemini & 2747 & 41.6\% & 9.66 \\
+\FS{}-MQM / GPT5 & 2758 & 23.0\% & 15.91 \\
+\bottomrule
+\end{tabularx}
+
+\end{table}
+
+
+\subsection{Priority fixes}
+\label{sec:fixes}
+(1)~Calque over-penalization;
+(2)~register/dialect gating;
+(3)~meaning-loss check before high scores (\texttt{none});
+(4)~critical-error detection for Q1;
+(5)~low-confidence flags on low-resource pairs;
+(6)~better false-friend span localization.
+
+\subsection{Error-analysis conclusions}
+\FS{} is competitive on aggregate correlation, but failure analysis shows
+structured blind spots.
+Main overestimate modes: ``everything is fluent'' (\texttt{none}) and
+register/dialect---not calque.
+Main underestimate mode: calque over-penalizing acceptable literalism.
+
+\section{Limitations}
+\label{sec:limits}
+\begin{itemize}
+\item Judge contamination risk: Gemini training data may overlap with the WMT25
+  publication window (unquantified).
+\item No new matched open-weight GEMBA+\FS{} historical reruns in this revision
+  (budget). Section~\ref{sec:grid} provides matched Gemini contrasts on WMT25.
+\item Fair-subset dropout on WMT25 is non-uniform (66.3\%--90.0\% by pair).
+  On WMT25, chrF++ stays on its own subset ($n{=}4{,}200$; missing for EN$\to$it\_IT).
+  For WMT22--24 MQM we recompute chrF++ (Section~\ref{sec:fair}, Experiment~\ref{sec:exp3}; $\rho{=}0.290$, PA${=}0.626$, $n{=}2{,}553$).
+\item Model snapshot identity: headline Gemini run stored the API alias but not
+  a pinned version string.
+\item Proprietary prompt/weights limit full public reproduction
+  (Appendix~\ref{app:schema} + confidential review access).
+\item Error-analysis MQM subset ($n{=}824$) differs from correlation MQM subsets
+  ($n{=}808$ / $2{,}628$) by mask construction.
+\end{itemize}
+
+\section{Discussion and conclusions}
+We close by restating the claims the data support, the scope boundaries they do not cross, and the design implications for backbone choice.
+\subsection{Main claims supported by the data}
+On WMT25 ESA ($n{=}3{,}526$), \FS{}-Gemini reaches Spearman $0.613$, while matched
+GEMBA-ESA on the same Gemini backbone is statistically tied on $\rho$ and
+slightly ahead on PA ($0.730$ vs $0.722$).
+The headline gap vs official GEMBA-ESA--GPT-4.1 is mostly backbone
+(${+}0.058$ of ${+}0.065$); framework CI covers zero.
+Gaps vs MetricX / XCOMET / CometKiwi / chrF++ by PA remain significant
+($p{<}0.05$) on the primary mask.
+On WMT22 MQM, \FS{}-GPT5 reaches $\rho{=}0.624$.
+
+\subsection{Scope boundaries}
+On extended WMT22--24 MQM, flat GPT-5 leads structured GPT-5 in $\rho$
+($0.584$ vs $0.551$; $\Delta$PA n.s.).
+Recomputed chrF++ on $n{=}2{,}553$ remains far below ($\rho{=}0.290$).
+WMT25 advantages do not transfer uniformly to the full historical MQM cohort.
+Error analysis: aggregate lead coexists with fluency-bias and register/dialect
+blind spots.
+
+\subsection{Backbone design}
+The judge backbone materially affects MQM correlation.
+Typology: \FS{}'s advantage over chrF++ correlates with syntactic distance; the
+signal is weaker for neural metrics.
+We argue for a pinned open-weight judge next.
+
+\subsection{Conclusion}
+\FS{} is a strong automatic fluency metric on WMT25 ESA under fair masks,
+competitive on WMT22 MQM, and highly contingent on the judge backbone and
+evaluation scope.
+The honest reading of the Gemini-matched grid is that protocol gains are small
+once the backbone is fixed; the broader WMT22--24 data favor
+FluencyScore-MQM-flat-GPT5.
+Error analysis makes behavior legible: calque/false-friend detects work;
+fluent-but-wrong and dialect/register remain priority fixes.
+A companion deployment system uses \FS{} as an online quality signal for Algebras
+Agentic Localization (\url{https://algebras.ai}).
+
+\section{Reproducibility Statement}
+\label{sec:repro}
+\textbf{Three layers.}
+(1)~\textbf{Public:} official baseline numbers, masks and $n$, bootstrap
+seeds/procedure, analysis code, and per-segment scores for our runs.
+(2)~\textbf{API-reproducible:} our GEMBA-ESA cells use published GEMBA-ESA prompts
+on named public models at temperature~0; provider drift applies; validation in
+Section~\ref{sec:prereg}.
+(3)~\textbf{Not fully public:} \FS{} weights and judge prompt.
+We publish the output schema and taxonomy (Appendix~\ref{app:schema}), release
+per-segment outputs, include worked examples, state that weights are fixed
+constants not fitted on evaluation cohorts, and provide weights+prompt to
+reviewers/area chairs confidentially on request.
+
+\appendix
+\section{Artifacts and reproduction}
+\label{app:artifacts}
+\begin{itemize}
+\item \path{artifacts/notebooks/fluency2_wmt_evaluation_SAFE.ipynb} --- correlation
+\item \path{artifacts/notebooks/fluency2_error_analysis_SAFE.ipynb} --- error analysis
+  (prompt-edit cells redacted)
+\item \path{artifacts/tables/} --- precomputed numeric tables
+\item \path{artifacts/mqm/} --- MQM summary CSVs (segment parquets omitted)
+\item \path{artifacts/tables/table3a_wmt2224_with_chrf_full.csv}
+  --- recomputed chrF++ aggregates (Exp.~3)
+\end{itemize}
+Public layout: \path{paper/wmt26/fluencyscore_public_release/}.
+The judge prompt, sub-dimension weights, and deployment routing logic are
+proprietary and are not included in the public artifacts.
+
+\section{Output schema and schematic judge prompt}
+\label{app:schema}
+This appendix lists the per-segment fields returned by the judge and a schematic prompt with proprietary content redacted.
+\subsection{Output schema (per segment)}
+
+\begin{table}[t]
+\centering
+\scriptsize
+\caption{Per-segment output schema.}
+\label{tab:schema}
+\begin{tabularx}{\columnwidth}{>{\raggedright\arraybackslash}Xc>{\raggedright\arraybackslash}X}
+\toprule
+Field & Type & Meaning \\
+\midrule
+idiomatic & float 1--10 & Idiomatic phrasing \\
+collocational & float 1--10 & Collocational fit \\
+discourse & float 1--10 & Discourse / connectors \\
+pragmatic & float 1--10 & Pragmatic appropriateness \\
+calque & float 1--10 & Freedom from calque (higher=better) \\
+aggregate & float & Fixed weighted sum of the five dims \\
+issue\_type & enum & Main issue label \\
+severity & enum & cosmetic$|$minor$|$major$|$critical \\
+problematic\_phrase & string & Span in the MT \\
+suggested\_fix & string & Suggested rewrite \\
+low\_confidence & bool & Judge uncertainty flag \\
+max\_score\_diff & float & Disagreement across double-pass \\
+\bottomrule
+\end{tabularx}
+
+\end{table}
+
+
+\subsection{Schematic prompt (placeholders only)}
+\textit{System role.} You are a translation fluency judge. Score only
+fluency-related phenomena; do not optimize for adequacy alone.
+
+\textit{Input.} \texttt{source\_lang}, \texttt{target\_lang}, \texttt{source\_text},
+\texttt{mt\_text}; optional locale / formality / glossary.
+
+\textit{Rubric} \texttt{[PROPRIETARY\_RUBRIC\_TEXT]}.
+For each of idiomatic, collocational, discourse, pragmatic, calque $\rightarrow$
+score in $[1,10]$.
+
+\textit{Aggregation} \texttt{[PROPRIETARY\_WEIGHTS]}:
+$\mathrm{aggregate}=\sum_i w_i\cdot\mathrm{dim}_i$.
+
+\textit{Error record:} choose one \texttt{issue\_type}; set severity; quote
+\texttt{problematic\_phrase}; propose \texttt{suggested\_fix}; set confidence
+fields.
+
+\textit{Output:} JSON matching the schema above only. No chain-of-thought in the
+returned object.
+\textit{Decoding:} temperature~0; two independent calls; mean aggregates.
+
+\subsection{Confidential appendix}
+Full prompt text and numeric weights are available to reviewers and area chairs
+on request under the venue's confidential-review process.
+
+\bibliography{fluencyscore}
+
+\end{document}

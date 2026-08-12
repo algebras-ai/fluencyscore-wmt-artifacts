@@ -1,0 +1,14 @@
+pair,n_all,n_human,n_fair_no_chrf_pp,n_fair_with_chrf_pp,n_dropped_no_chrf_vs_human,n_dropped_with_chrf_vs_human,n_in_no_chrf_but_not_with_chrf,missing_fluency2,missing_gemba_score,missing_metricx_score,missing_xcomet_score,missing_cometKiwi_score,missing_chrf_pp
+EN→ar_EG,380,380,342,342,38,38,0,0,38,38,38,38,0
+EN→bho_IN,380,380,288,288,92,92,0,0,92,92,92,92,0
+EN→cs_CZ,400,400,304,304,96,96,0,0,96,96,96,96,0
+EN→et_EE,380,380,288,288,92,92,0,0,92,92,92,92,0
+EN→is_IS,380,380,252,252,128,128,0,0,128,128,128,128,0
+EN→it_IT,360,360,252,0,108,360,252,0,108,108,108,108,360
+EN→ja_JP,380,380,288,288,92,92,0,0,92,92,92,92,0
+EN→mas_KE,380,380,306,306,74,74,0,1,74,74,74,74,0
+EN→ru_RU,380,380,288,288,92,92,0,0,92,92,92,92,0
+EN→sr_Cyrl_RS,380,380,306,306,74,74,0,0,74,74,74,74,0
+EN→uk_UA,380,380,342,342,38,38,0,0,38,38,38,38,0
+EN→zh_CN,380,380,270,270,110,110,0,0,110,110,110,110,0
+__ALL__,4560,4560,3526,3274,1034,1286,252,1,1034,1034,1034,1034,360

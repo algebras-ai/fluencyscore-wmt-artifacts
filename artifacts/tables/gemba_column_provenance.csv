@@ -1,0 +1,7 @@
+label,where,origin,mode,notes
+GEMBA-MQM-GPT5 → now display fluency_mqm_flat-GPT5,table2a/2b/2c; bundle WMT22/22-24,our_script,fluency_mqm_flat (CLI alias gemba_mqm),Priority: NOT official GEMBA; FLUENCY_MQM rubric
+GEMBA-MQM-GPT4,table2a/2c; bundle WMT22,WMT_Microsoft_release,merge_gemba_into_wmt_mqm ← GEMBA-GPT4-SQM-refA,Upstream file is SQM; display historically said MQM
+GEMBA-DA-GPT4,table2a/2c; bundle WMT22,WMT_Microsoft_release,merge ← GEMBA-GPT4-DA-refA,
+GEMBA-ESA-GPT4.1,table1/table3; bundle WMT25,WMT25_automatic_scores,merge_wmt25_auto_metrics → gemba_score,
+GEMBA-MQM-GPT4o → fluency_mqm_flat / GPT-4o,matched_backbone bundle,our_script,fluency_mqm_flat,
+GEMBA-MQM-GPT4.1 → fluency_mqm_flat / GPT-4.1,matched_backbone bundle,our_script,fluency_mqm_flat,

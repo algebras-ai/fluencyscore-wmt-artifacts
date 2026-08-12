@@ -1,0 +1,15 @@
+block,label,spearman,spearman_p,kendall,kendall_p,pa,n
+fair_subset_all_metrics_non_null (n=808; year=wmt22 only),fluency2-GPT5,0.624,<0.0001,0.479,<0.0001,0.78,808
+fair_subset_all_metrics_non_null (n=808; year=wmt22 only),GEMBA-MQM-GPT5,0.614,<0.0001,0.486,<0.0001,0.775,808
+fair_subset_all_metrics_non_null (n=808; year=wmt22 only),fluency2-Opus4.7,0.587,<0.0001,0.447,<0.0001,0.761,808
+fair_subset_all_metrics_non_null (n=808; year=wmt22 only),fluency2-Gemini,0.566,<0.0001,0.429,<0.0001,0.751,808
+fair_subset_all_metrics_non_null (n=808; year=wmt22 only),fluency2-GPT4o,0.526,<0.0001,0.401,<0.0001,0.732,808
+fair_subset_all_metrics_non_null (n=808; year=wmt22 only),GEMBA-MQM-GPT4,0.515,<0.0001,0.436,<0.0001,0.698,808
+fair_subset_all_metrics_non_null (n=808; year=wmt22 only),fluency2-GPT4.1,0.507,<0.0001,0.386,<0.0001,0.724,808
+fair_subset_all_metrics_non_null (n=808; year=wmt22 only),GEMBA-DA-GPT4,0.47,<0.0001,0.403,<0.0001,0.673,808
+fair_subset_all_metrics_non_null (n=808; year=wmt22 only),chrF++,0.35,<0.0001,0.262,<0.0001,0.653,808
+openrouter_vs_human_mqm (mask: human_non_null AND model_score_non_null; 2758-row universe),GEMBA-MQM-GPT5 | score_non_null=2758/2758 (missing 0); corr_rows=human∩score=2658/2758 (human_non_null=2658/2758),0.584,<0.0001,0.456,<0.0001,0.764,2658
+openrouter_vs_human_mqm (mask: human_non_null AND model_score_non_null; 2758-row universe),fluency2-GPT5 | score_non_null=2737/2758 (missing 21); corr_rows=human∩score=2637/2758 (human_non_null=2658/2758),0.55,<0.0001,0.418,<0.0001,0.745,2637
+openrouter_vs_human_mqm (mask: human_non_null AND model_score_non_null; 2758-row universe),fluency2-Opus4.7 | score_non_null=2727/2758 (missing 31); corr_rows=human∩score=2627/2758 (human_non_null=2658/2758),0.534,<0.0001,0.404,<0.0001,0.737,2627
+openrouter_vs_human_mqm (mask: human_non_null AND model_score_non_null; 2758-row universe),fluency2-GPT4.1 | score_non_null=2757/2758 (missing 1); corr_rows=human∩score=2657/2758 (human_non_null=2658/2758),0.53,<0.0001,0.404,<0.0001,0.736,2657
+openrouter_vs_human_mqm (mask: human_non_null AND model_score_non_null; 2758-row universe),fluency2-GPT4o | score_non_null=2750/2758 (missing 8); corr_rows=human∩score=2650/2758 (human_non_null=2658/2758),0.528,<0.0001,0.404,<0.0001,0.736,2650

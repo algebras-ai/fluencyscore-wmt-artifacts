@@ -1,0 +1,10 @@
+year,pair,n,n_ref,n_src_align
+wmt22,en-de,150,150,150
+wmt22,en-ru,444,444,444
+wmt22,zh-en,224,224,224
+wmt23,en-de,127,100,100
+wmt23,he-en,389,376,376
+wmt23,zh-en,239,206,206
+wmt24,en-de,187,185,185
+wmt24,en-es,430,430,430
+wmt24,ja-zh,446,438,438

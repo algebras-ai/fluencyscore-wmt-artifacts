@@ -1,0 +1,9 @@
+{
+  "fair_n": 2636,
+  "fair_with_ref_n": 2553,
+  "align_src_n": 2553,
+  "chrf_spearman": 0.29026915467333836,
+  "chrf_pa": 0.6256133841215742,
+  "chrf_n": 2553,
+  "method": "sacrebleu CHRF(word_order=2); refs from mt-metrics-eval-v2 refA aligned by source text"
+}

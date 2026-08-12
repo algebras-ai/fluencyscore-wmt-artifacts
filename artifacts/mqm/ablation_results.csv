@@ -1,0 +1,9 @@
+metric,spearman,kendall,pa,n
+fluency2_gpt5,0.624,0.479,0.78,808
+fluency2_opus47,0.587,0.447,0.761,808
+fluency2_gemini,0.566,0.429,0.751,808
+fluency2_gpt4o,0.526,0.401,0.732,808
+gemba_mqm,0.515,0.436,0.698,808
+fluency2_gpt41,0.507,0.386,0.724,808
+gemba_da,0.47,0.403,0.673,808
+chrf_pp,0.35,0.262,0.653,808

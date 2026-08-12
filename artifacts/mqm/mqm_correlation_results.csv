@@ -1,0 +1,5 @@
+metric,spearman,p_value,kendall,pa,n
+fluency2,0.537,0.0,0.405,0.737,2658
+gemba_mqm,0.52,0.0,0.439,0.699,824
+gemba_da,0.476,0.0,0.407,0.674,824
+chrf_pp,0.35,0.0,0.261,0.652,824
