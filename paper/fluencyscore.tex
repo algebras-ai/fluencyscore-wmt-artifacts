@@ -24,6 +24,8 @@
 
 \newcommand{\FS}{FluencyScore}
 \newcommand{\FSCal}{FluencyScore-cal}
+% Full URL for hyperref (do not wrap \url around a macro).
+\newcommand{\ArtifactsLink}{\url{https://github.com/algebras-ai/fluencyscore-wmt-artifacts}}
 
 \title{\FS: A Structured {LLM}-Judge for Fluency in Machine Translation}
 
@@ -41,7 +43,8 @@
 
 \begin{document}
 \maketitle
-\footnotetext[1]{Correspondence: \texttt{aira@algebras.ai}. Working draft --- 2026-07-02 (updated 2026-08-13).}
+\footnotetext[1]{Correspondence: \texttt{aira@algebras.ai}. Working draft --- 2026-07-02 (updated 2026-08-13).
+  Code and numeric artifacts (no proprietary judge prompt): \ArtifactsLink.}
 
 \begin{abstract}
 LLM-based machine translation evaluation has advanced rapidly since
@@ -127,6 +130,9 @@ and complement aggregate correlation with per-segment error analysis.
   to \FS{}'s advantage.
 \item A segment-level error analysis with an issue-type taxonomy, headline
   failure modes, and a variance-collapse study of the MQM-style variant.
+\item Public numeric artifacts and scrubbed analysis notebooks at
+  \ArtifactsLink{} (judge prompt and sub-dimension weights remain proprietary;
+  see Appendix~\ref{app:artifacts}).
 \end{itemize}
 
 \section{\FS{} and \FSCal{}}
@@ -1006,16 +1012,17 @@ Agentic Localization (\url{https://algebras.ai}).
 \section{Reproducibility Statement}
 \label{sec:repro}
 \textbf{Three layers.}
-(1)~\textbf{Public:} official baseline numbers, masks and $n$, bootstrap
-seeds/procedure, analysis code, and per-segment scores for our runs.
+(1)~\textbf{Public:} paper sources, official baseline numbers, masks and $n$,
+bootstrap seeds/procedure, scrubbed analysis notebooks, and numeric tables are
+released at \ArtifactsLink{} (Appendix~\ref{app:artifacts}).
 (2)~\textbf{API-reproducible:} our GEMBA-ESA cells use published GEMBA-ESA prompts
 on named public models at temperature~0; provider drift applies; validation in
 Section~\ref{sec:prereg}.
 (3)~\textbf{Not fully public:} \FS{} weights and judge prompt.
 We publish the output schema and taxonomy (Appendix~\ref{app:schema}), release
-per-segment outputs, include worked examples, state that weights are fixed
-constants not fitted on evaluation cohorts, and provide weights+prompt to
-reviewers/area chairs confidentially on request.
+per-segment score tables where safe, include worked examples, state that weights
+are fixed constants not fitted on evaluation cohorts, and provide weights+prompt
+to reviewers/area chairs confidentially on request.
 
 \appendix
 \section{Artifacts and reproduction}
@@ -1029,7 +1036,9 @@ reviewers/area chairs confidentially on request.
 \item \path{artifacts/tables/table3a_wmt2224_with_chrf_full.csv}
   --- recomputed chrF++ aggregates (Exp.~3)
 \end{itemize}
-Public release: \url{https://github.com/algebras-ai/fluencyscore-wmt-artifacts} (repo-root \path{artifacts/} and \path{paper/}).
+Public release (paper PDF/\TeX{} + safe artifacts): \ArtifactsLink.\\
+Repository layout: repo-root \path{artifacts/} and \path{paper/}.\\
+Product site: \url{https://algebras.ai}.
 The judge prompt, sub-dimension weights, and deployment routing logic are
 proprietary and are not included in the public artifacts.
 
